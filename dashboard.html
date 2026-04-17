@@ -17,19 +17,46 @@
       padding: 2rem;
     }
 
-    header { margin-bottom: 2rem; }
+    header { margin-bottom: 1.75rem; }
     header h1 { font-size: 1.6rem; font-weight: 700; }
     header p  { color: #94a3b8; font-size: 0.9rem; margin-top: 0.25rem; }
 
-    #run-selector {
+    /* ── Tabs ── */
+    .tab-bar {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #2d3450;
+      margin-bottom: 2rem;
+    }
+    .tab-btn {
+      padding: 0.5rem 1.1rem;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: #64748b;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover  { color: #cbd5e1; }
+    .tab-btn.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Run selector ── */
+    .run-selector {
       display: flex;
       align-items: center;
       gap: 0.75rem;
       margin-bottom: 2rem;
-      flex-wrap: wrap;
     }
-    #run-selector label { color: #94a3b8; font-size: 0.85rem; }
-    #run-select {
+    .run-selector label { color: #94a3b8; font-size: 0.85rem; }
+    .run-select {
       background: #1e2130;
       border: 1px solid #2d3450;
       color: #e2e8f0;
@@ -39,6 +66,7 @@
       cursor: pointer;
     }
 
+    /* ── Stat cards ── */
     .cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -57,6 +85,7 @@
     .card .value.blue   { color: #60a5fa; }
     .card .value.yellow { color: #fbbf24; }
 
+    /* ── Trend chart ── */
     .full-card {
       background: #1e2130;
       border: 1px solid #2d3450;
@@ -65,24 +94,16 @@
       margin-bottom: 1.5rem;
     }
     .full-card h2 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 1rem; font-weight: 600; }
-    .full-card canvas { max-height: 260px; }
+    .full-card canvas { max-height: 240px; }
 
-    .charts {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-    @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
-
-    .chart-card {
+    /* ── New companies table ── */
+    .list-card {
       background: #1e2130;
       border: 1px solid #2d3450;
       border-radius: 10px;
       padding: 1.5rem;
     }
-    .chart-card h2 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 1rem; font-weight: 600; }
-    .chart-card canvas { max-height: 320px; }
+    .list-card h2 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 1rem; font-weight: 600; }
 
     .company-table {
       width: 100%;
@@ -117,7 +138,7 @@
       color: #4ade80;
     }
 
-    .muted { color: #64748b; font-size: 0.85rem; padding: 1rem 0; font-style: italic; }
+    .muted { color: #64748b; font-size: 0.85rem; padding: 0.75rem 0; font-style: italic; }
 
     #error-msg {
       display: none;
@@ -139,43 +160,12 @@
 
 <div id="error-msg">
   <strong>Could not load data.</strong><br><br>
-  If viewing this file locally, browsers block local file access for security.<br>
-  Serve it with: <code>python -m http.server 5000</code> from the Job Tracker folder,
-  then open <code>http://localhost:5000/dashboard.html</code><br><br>
-  If viewing on GitHub Pages, make sure <code>job_tracker_log.csv</code> is committed to the repo.
+  Make sure <code>job_tracker_log.csv</code> is committed to the repo and GitHub Pages is enabled.
 </div>
 
 <div id="app" style="display:none">
-
-  <div id="run-selector">
-    <label for="run-select">Viewing run:</label>
-    <select id="run-select"></select>
-  </div>
-
-  <div class="cards">
-    <div class="card"><div class="label">Keyword</div><div class="value blue"   id="c-keyword">—</div></div>
-    <div class="card"><div class="label">Date</div><div class="value"           id="c-date">—</div></div>
-    <div class="card"><div class="label">New Companies</div><div class="value green"  id="c-new">—</div></div>
-    <div class="card"><div class="label">Total Companies</div><div class="value blue"  id="c-total">—</div></div>
-    <div class="card"><div class="label">Listings Found</div><div class="value yellow" id="c-listings">—</div></div>
-  </div>
-
-  <div class="full-card" id="trend-section">
-    <h2>New Companies Week Over Week</h2>
-    <canvas id="trendChart"></canvas>
-  </div>
-
-  <div class="charts">
-    <div class="chart-card">
-      <h2>New Companies This Run <span class="badge" id="new-badge">0</span></h2>
-      <div id="new-company-list"></div>
-    </div>
-    <div class="chart-card">
-      <h2>Top States</h2>
-      <canvas id="stateChart"></canvas>
-    </div>
-  </div>
-
+  <div class="tab-bar" id="tab-bar"></div>
+  <div id="tab-panels"></div>
 </div>
 
 <script>
@@ -184,8 +174,8 @@ const COLORS = [
   "#34d399","#fb923c","#e879f9","#38bdf8","#facc15",
 ];
 
-let allData = [];
-let trendChart, stateChart;
+// Per-keyword chart instances keyed by keyword
+const charts = {};
 
 function destroyChart(c) { if (c) c.destroy(); }
 
@@ -194,43 +184,40 @@ function parseList(raw) {
   return raw.split(";").map(s => s.trim()).filter(Boolean);
 }
 
-function parsePairs(raw) {
-  return parseList(raw).map(item => {
-    const idx = item.lastIndexOf(":");
-    if (idx === -1) return null;
-    return { label: item.slice(0, idx).trim(), value: parseInt(item.slice(idx + 1).trim(), 10) };
-  }).filter(Boolean);
-}
-
 function processRows(rows) {
   return rows.map(r => ({
     date:             r.date,
     keyword:          r.keyword,
-    country:          r.country,
+    country:          r.country || "us",
     total_raw:        +r.total_raw || 0,
     total_filtered:   +r.total_filtered || 0,
     excluded_count:   +r.excluded_count || 0,
     total_companies:  +r.total_companies || 0,
     new_company_count: r.new_company_count !== "" ? +r.new_company_count : null,
     new_companies:    parseList(r.new_companies),
-    top_states:       parsePairs(r.top_states),
   }));
 }
 
-function renderRun(idx) {
-  const run = allData[idx];
+function groupByKeyword(rows) {
+  const map = {};
+  for (const r of rows) {
+    if (!map[r.keyword]) map[r.keyword] = [];
+    map[r.keyword].push(r);
+  }
+  return map;
+}
+
+function renderRun(keyword, run) {
   const isBaseline = run.new_company_count === null;
 
-  document.getElementById("c-keyword").textContent  = run.keyword;
-  document.getElementById("c-date").textContent     = run.date;
-  document.getElementById("c-total").textContent    = run.total_companies.toLocaleString();
-  document.getElementById("c-listings").textContent = run.total_filtered.toLocaleString();
-  document.getElementById("c-new").textContent      = isBaseline ? "—" : run.new_company_count.toLocaleString();
-  document.getElementById("new-badge").textContent  = isBaseline ? "baseline" : run.new_companies.length;
+  document.getElementById(`c-new-${keyword}`).textContent      = isBaseline ? "—" : run.new_company_count.toLocaleString();
+  document.getElementById(`c-total-${keyword}`).textContent    = run.total_companies.toLocaleString();
+  document.getElementById(`c-listings-${keyword}`).textContent = run.total_filtered.toLocaleString();
+  document.getElementById(`new-badge-${keyword}`).textContent  = isBaseline ? "baseline" : run.new_companies.length;
 
-  const listEl = document.getElementById("new-company-list");
+  const listEl = document.getElementById(`company-list-${keyword}`);
   if (isBaseline) {
-    listEl.innerHTML = `<p class="muted">This is the baseline run. All ${run.total_companies.toLocaleString()} companies recorded as the starting point. New companies will appear from next week's run.</p>`;
+    listEl.innerHTML = `<p class="muted">Baseline run — ${run.total_companies.toLocaleString()} companies recorded as the starting point. New companies appear from next week's run.</p>`;
   } else if (!run.new_companies.length) {
     listEl.innerHTML = `<p class="muted">No new companies this week.</p>`;
   } else {
@@ -239,35 +226,16 @@ function renderRun(idx) {
     ).join("");
     listEl.innerHTML = `<table class="company-table"><thead><tr><th>#</th><th>Company</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
-
-  destroyChart(stateChart);
-  if (run.top_states.length) {
-    stateChart = new Chart(document.getElementById("stateChart"), {
-      type: "bar",
-      data: {
-        labels: run.top_states.map(s => s.label),
-        datasets: [{ data: run.top_states.map(s => s.value), backgroundColor: COLORS.slice(0, run.top_states.length), borderRadius: 4 }],
-      },
-      options: {
-        indexAxis: "y",
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: "#94a3b8" }, grid: { color: "#2d3450" } },
-          y: { ticks: { color: "#e2e8f0", font: { size: 11 } }, grid: { display: false } },
-        },
-      },
-    });
-  }
 }
 
-function renderTrend() {
-  const section = document.getElementById("trend-section");
-  const compRuns = allData.filter(r => r.new_company_count !== null);
+function renderTrend(keyword, runs) {
+  const section = document.getElementById(`trend-${keyword}`);
+  const compRuns = runs.filter(r => r.new_company_count !== null);
   if (!compRuns.length) { section.style.display = "none"; return; }
   section.style.display = "";
 
-  destroyChart(trendChart);
-  trendChart = new Chart(document.getElementById("trendChart"), {
+  destroyChart(charts[`trend-${keyword}`]);
+  charts[`trend-${keyword}`] = new Chart(document.getElementById(`trend-chart-${keyword}`), {
     type: "line",
     data: {
       labels: compRuns.map(r => r.date),
@@ -298,25 +266,93 @@ function renderTrend() {
   });
 }
 
-function init(rows) {
-  allData = processRows(rows);
+function buildPanel(keyword, runs) {
+  const id = keyword.replace(/\s+/g, "_");
+  const latestIdx = runs.length - 1;
+
+  // Build run selector options
+  const options = runs.map((r, i) => {
+    const label = r.new_company_count === null
+      ? `${r.date} (baseline)`
+      : `${r.date} (+${r.new_company_count} new)`;
+    return `<option value="${i}"${i === latestIdx ? " selected" : ""}>${label}</option>`;
+  }).join("");
+
+  return `
+    <div class="tab-panel" id="panel-${id}">
+      <div class="run-selector">
+        <label for="run-select-${id}">Viewing run:</label>
+        <select class="run-select" id="run-select-${id}">${options}</select>
+      </div>
+
+      <div class="cards">
+        <div class="card"><div class="label">New Companies</div><div class="value green" id="c-new-${id}">—</div></div>
+        <div class="card"><div class="label">Total Companies</div><div class="value blue" id="c-total-${id}">—</div></div>
+        <div class="card"><div class="label">Listings Found</div><div class="value yellow" id="c-listings-${id}">—</div></div>
+      </div>
+
+      <div class="full-card" id="trend-${id}">
+        <h2>New Companies Week Over Week</h2>
+        <canvas id="trend-chart-${id}"></canvas>
+      </div>
+
+      <div class="list-card">
+        <h2>New Companies This Run <span class="badge" id="new-badge-${id}">0</span></h2>
+        <div id="company-list-${id}"></div>
+      </div>
+    </div>`;
+}
+
+function switchTab(keyword) {
+  const id = keyword.replace(/\s+/g, "_");
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.getElementById(`tab-${id}`).classList.add("active");
+  document.getElementById(`panel-${id}`).classList.add("active");
+}
+
+function init(allRows) {
+  const rows    = processRows(allRows);
+  const grouped = groupByKeyword(rows);
+  const keywords = Object.keys(grouped);
+
+  if (!keywords.length) {
+    document.getElementById("error-msg").style.display = "block";
+    return;
+  }
 
   document.getElementById("app").style.display = "block";
 
-  const select = document.getElementById("run-select");
-  allData.forEach((r, i) => {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = r.new_company_count === null
-      ? `${r.date} — ${r.keyword} (baseline)`
-      : `${r.date} — ${r.keyword} (+${r.new_company_count} new)`;
-    select.appendChild(opt);
-  });
-  select.value = allData.length - 1;
+  const tabBar   = document.getElementById("tab-bar");
+  const panels   = document.getElementById("tab-panels");
 
-  renderTrend();
-  renderRun(allData.length - 1);
-  select.addEventListener("change", () => renderRun(Number(select.value)));
+  keywords.forEach((kw, i) => {
+    const id = kw.replace(/\s+/g, "_");
+    const runs = grouped[kw];
+
+    // Tab button
+    const btn = document.createElement("button");
+    btn.className = "tab-btn" + (i === 0 ? " active" : "");
+    btn.id = `tab-${id}`;
+    btn.textContent = kw;
+    btn.addEventListener("click", () => switchTab(kw));
+    tabBar.appendChild(btn);
+
+    // Panel HTML
+    panels.insertAdjacentHTML("beforeend", buildPanel(id, runs));
+
+    // Make first panel visible
+    if (i === 0) document.getElementById(`panel-${id}`).classList.add("active");
+
+    // Initial render
+    renderTrend(id, runs);
+    renderRun(id, runs[runs.length - 1]);
+
+    // Run selector change handler
+    document.getElementById(`run-select-${id}`).addEventListener("change", e => {
+      renderRun(id, runs[Number(e.target.value)]);
+    });
+  });
 }
 
 Papa.parse("job_tracker_log.csv", {
