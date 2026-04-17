@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Tracker Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header { margin-bottom: 2rem; }
+    header h1 { font-size: 1.6rem; font-weight: 700; }
+    header p  { color: #94a3b8; font-size: 0.9rem; margin-top: 0.25rem; }
+
+    #run-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    #run-selector label { color: #94a3b8; font-size: 0.85rem; }
+    #run-select {
+      background: #1e2130;
+      border: 1px solid #2d3450;
+      color: #e2e8f0;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3450;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+    }
+    .card .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .card .value { font-size: 2rem; font-weight: 700; }
+    .card .value.green  { color: #4ade80; }
+    .card .value.blue   { color: #60a5fa; }
+    .card .value.yellow { color: #fbbf24; }
+
+    .full-card {
+      background: #1e2130;
+      border: 1px solid #2d3450;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .full-card h2 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 1rem; font-weight: 600; }
+    .full-card canvas { max-height: 260px; }
+
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+
+    .chart-card {
+      background: #1e2130;
+      border: 1px solid #2d3450;
+      border-radius: 10px;
+      padding: 1.5rem;
+    }
+    .chart-card h2 { font-size: 0.95rem; color: #94a3b8; margin-bottom: 1rem; font-weight: 600; }
+    .chart-card canvas { max-height: 320px; }
+
+    .company-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .company-table th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      color: #64748b;
+      font-weight: 600;
+      border-bottom: 1px solid #2d3450;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .company-table td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #1a1f2e;
+      color: #e2e8f0;
+    }
+    .company-table tr:last-child td { border-bottom: none; }
+    .company-table tr:hover td { background: #252a3a; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: rgba(74,222,128,0.15);
+      color: #4ade80;
+    }
+
+    .muted { color: #64748b; font-size: 0.85rem; padding: 1rem 0; font-style: italic; }
+
+    #error-msg {
+      display: none;
+      background: #2a1a1a;
+      border: 1px solid #7f1d1d;
+      border-radius: 10px;
+      padding: 1.5rem 2rem;
+      color: #fca5a5;
+    }
+    #error-msg code { background: #1a0f0f; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Job Tracker Dashboard</h1>
+  <p>New companies posting jobs with a keyword, week over week</p>
+</header>
+
+<div id="error-msg">
+  <strong>Could not load data.</strong><br><br>
+  If viewing this file locally, browsers block local file access for security.<br>
+  Serve it with: <code>python -m http.server 5000</code> from the Job Tracker folder,
+  then open <code>http://localhost:5000/dashboard.html</code><br><br>
+  If viewing on GitHub Pages, make sure <code>job_tracker_log.csv</code> is committed to the repo.
+</div>
+
+<div id="app" style="display:none">
+
+  <div id="run-selector">
+    <label for="run-select">Viewing run:</label>
+    <select id="run-select"></select>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Keyword</div><div class="value blue"   id="c-keyword">—</div></div>
+    <div class="card"><div class="label">Date</div><div class="value"           id="c-date">—</div></div>
+    <div class="card"><div class="label">New Companies</div><div class="value green"  id="c-new">—</div></div>
+    <div class="card"><div class="label">Total Companies</div><div class="value blue"  id="c-total">—</div></div>
+    <div class="card"><div class="label">Listings Found</div><div class="value yellow" id="c-listings">—</div></div>
+  </div>
+
+  <div class="full-card" id="trend-section">
+    <h2>New Companies Week Over Week</h2>
+    <canvas id="trendChart"></canvas>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <h2>New Companies This Run <span class="badge" id="new-badge">0</span></h2>
+      <div id="new-company-list"></div>
+    </div>
+    <div class="chart-card">
+      <h2>Top States</h2>
+      <canvas id="stateChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const COLORS = [
+  "#60a5fa","#4ade80","#fbbf24","#f87171","#a78bfa",
+  "#34d399","#fb923c","#e879f9","#38bdf8","#facc15",
+];
+
+let allData = [];
+let trendChart, stateChart;
+
+function destroyChart(c) { if (c) c.destroy(); }
+
+function parseList(raw) {
+  if (!raw) return [];
+  return raw.split(";").map(s => s.trim()).filter(Boolean);
+}
+
+function parsePairs(raw) {
+  return parseList(raw).map(item => {
+    const idx = item.lastIndexOf(":");
+    if (idx === -1) return null;
+    return { label: item.slice(0, idx).trim(), value: parseInt(item.slice(idx + 1).trim(), 10) };
+  }).filter(Boolean);
+}
+
+function processRows(rows) {
+  return rows.map(r => ({
+    date:             r.date,
+    keyword:          r.keyword,
+    country:          r.country,
+    total_raw:        +r.total_raw || 0,
+    total_filtered:   +r.total_filtered || 0,
+    excluded_count:   +r.excluded_count || 0,
+    total_companies:  +r.total_companies || 0,
+    new_company_count: r.new_company_count !== "" ? +r.new_company_count : null,
+    new_companies:    parseList(r.new_companies),
+    top_states:       parsePairs(r.top_states),
+  }));
+}
+
+function renderRun(idx) {
+  const run = allData[idx];
+  const isBaseline = run.new_company_count === null;
+
+  document.getElementById("c-keyword").textContent  = run.keyword;
+  document.getElementById("c-date").textContent     = run.date;
+  document.getElementById("c-total").textContent    = run.total_companies.toLocaleString();
+  document.getElementById("c-listings").textContent = run.total_filtered.toLocaleString();
+  document.getElementById("c-new").textContent      = isBaseline ? "—" : run.new_company_count.toLocaleString();
+  document.getElementById("new-badge").textContent  = isBaseline ? "baseline" : run.new_companies.length;
+
+  const listEl = document.getElementById("new-company-list");
+  if (isBaseline) {
+    listEl.innerHTML = `<p class="muted">This is the baseline run. All ${run.total_companies.toLocaleString()} companies recorded as the starting point. New companies will appear from next week's run.</p>`;
+  } else if (!run.new_companies.length) {
+    listEl.innerHTML = `<p class="muted">No new companies this week.</p>`;
+  } else {
+    const rows = run.new_companies.map((name, i) =>
+      `<tr><td>${i + 1}</td><td>${name}</td></tr>`
+    ).join("");
+    listEl.innerHTML = `<table class="company-table"><thead><tr><th>#</th><th>Company</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  destroyChart(stateChart);
+  if (run.top_states.length) {
+    stateChart = new Chart(document.getElementById("stateChart"), {
+      type: "bar",
+      data: {
+        labels: run.top_states.map(s => s.label),
+        datasets: [{ data: run.top_states.map(s => s.value), backgroundColor: COLORS.slice(0, run.top_states.length), borderRadius: 4 }],
+      },
+      options: {
+        indexAxis: "y",
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#94a3b8" }, grid: { color: "#2d3450" } },
+          y: { ticks: { color: "#e2e8f0", font: { size: 11 } }, grid: { display: false } },
+        },
+      },
+    });
+  }
+}
+
+function renderTrend() {
+  const section = document.getElementById("trend-section");
+  const compRuns = allData.filter(r => r.new_company_count !== null);
+  if (!compRuns.length) { section.style.display = "none"; return; }
+  section.style.display = "";
+
+  destroyChart(trendChart);
+  trendChart = new Chart(document.getElementById("trendChart"), {
+    type: "line",
+    data: {
+      labels: compRuns.map(r => r.date),
+      datasets: [
+        {
+          label: "New Companies",
+          data: compRuns.map(r => r.new_company_count),
+          borderColor: "#4ade80",
+          backgroundColor: "rgba(74,222,128,0.1)",
+          fill: true, tension: 0.3, pointRadius: 5,
+        },
+        {
+          label: "Total Companies",
+          data: compRuns.map(r => r.total_companies),
+          borderColor: "#60a5fa",
+          backgroundColor: "rgba(96,165,250,0.07)",
+          fill: true, tension: 0.3, pointRadius: 5,
+        },
+      ],
+    },
+    options: {
+      plugins: { legend: { labels: { color: "#94a3b8" } } },
+      scales: {
+        x: { ticks: { color: "#94a3b8" }, grid: { color: "#2d3450" } },
+        y: { ticks: { color: "#94a3b8" }, grid: { color: "#2d3450" }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+function init(rows) {
+  allData = processRows(rows);
+
+  document.getElementById("app").style.display = "block";
+
+  const select = document.getElementById("run-select");
+  allData.forEach((r, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = r.new_company_count === null
+      ? `${r.date} — ${r.keyword} (baseline)`
+      : `${r.date} — ${r.keyword} (+${r.new_company_count} new)`;
+    select.appendChild(opt);
+  });
+  select.value = allData.length - 1;
+
+  renderTrend();
+  renderRun(allData.length - 1);
+  select.addEventListener("change", () => renderRun(Number(select.value)));
+}
+
+Papa.parse("job_tracker_log.csv", {
+  download: true,
+  header: true,
+  skipEmptyLines: true,
+  complete: results => init(results.data),
+  error: () => { document.getElementById("error-msg").style.display = "block"; },
+});
+</script>
+</body>
+</html>
