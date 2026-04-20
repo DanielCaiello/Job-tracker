@@ -100,7 +100,7 @@ def unique_companies(jobs):
 
 
 def load_previous_companies(csv_path, keyword):
-    """Return the company set from the most recent row for this keyword."""
+    """Return all companies ever seen for this keyword across all historical runs."""
     if not os.path.isfile(csv_path):
         return set()
     with open(csv_path, newline="", encoding="utf-8") as f:
@@ -108,10 +108,12 @@ def load_previous_companies(csv_path, keyword):
     keyword_rows = [r for r in rows if r.get("keyword", "").lower() == keyword.lower()]
     if not keyword_rows:
         return set()
-    raw = keyword_rows[-1].get("all_companies", "")
-    if not raw:
-        return set()
-    return {c.strip() for c in raw.split(";") if c.strip()}
+    all_seen = set()
+    for row in keyword_rows:
+        raw = row.get("all_companies", "")
+        if raw:
+            all_seen.update(c.strip() for c in raw.split(";") if c.strip())
+    return all_seen
 
 
 def append_to_csv(filepath, row):
