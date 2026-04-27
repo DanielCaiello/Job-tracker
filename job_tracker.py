@@ -142,6 +142,16 @@ def canonicalize_companies(companies):
     return {orig for orig, _ in accepted}
 
 
+def build_company_url_map(jobs):
+    """Return {employer_name: redirect_url} using the first posting seen per company."""
+    result = {}
+    for j in jobs:
+        name = employer_name(j)
+        if name and name not in result:
+            result[name] = j.get("redirect_url", "") or ""
+    return result
+
+
 def load_previous_companies(csv_path, keyword):
     """Return all companies ever seen for this keyword across all historical runs."""
     if not os.path.isfile(csv_path):
@@ -183,6 +193,7 @@ def run_keyword(keyword, exclude, country, csv_path, app_id, app_key):
 
     jobs_filtered   = filter_jobs(jobs_raw, exclude)
     excluded_n      = len(jobs_raw) - len(jobs_filtered)
+    url_map         = build_company_url_map(jobs_filtered)
     curr_companies  = canonicalize_companies(unique_companies(jobs_filtered))
     prev_normalized = {_normalize(c) for c in prev_companies}
     new_companies   = {c for c in curr_companies if _normalize(c) not in prev_normalized}
@@ -194,7 +205,12 @@ def run_keyword(keyword, exclude, country, csv_path, app_id, app_key):
     else:
         print(f"  New companies this week: {len(new_companies):,}")
         for name in sorted(new_companies):
-            print(f"    + {name}")
+            url = url_map.get(name, "")
+            print(f"    + {name}" + (f"  {url}" if url else ""))
+
+    def fmt_new_company(name):
+        url = url_map.get(name, "")
+        return f"{name}|{url}" if url else name
 
     row = {
         "date":              date.today().isoformat(),
@@ -205,7 +221,7 @@ def run_keyword(keyword, exclude, country, csv_path, app_id, app_key):
         "excluded_count":    excluded_n,
         "total_companies":   len(curr_companies),
         "new_company_count": len(new_companies) if not is_first_run else "",
-        "new_companies":     "; ".join(sorted(new_companies)) if not is_first_run else "",
+        "new_companies":     "; ".join(fmt_new_company(c) for c in sorted(new_companies)) if not is_first_run else "",
         "all_companies":     "; ".join(sorted(curr_companies)),
     }
     append_to_csv(csv_path, row)

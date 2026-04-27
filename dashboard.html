@@ -179,9 +179,16 @@ const charts = {};
 
 function destroyChart(c) { if (c) c.destroy(); }
 
-function parseList(raw) {
+function parseCompanyList(raw) {
   if (!raw) return [];
-  return raw.split(";").map(s => s.trim()).filter(Boolean);
+  return raw.split(";").map(s => {
+    const entry = s.trim();
+    if (!entry) return null;
+    const pipe = entry.indexOf("|");
+    if (pipe === -1) return { name: entry, url: null };
+    const url = entry.slice(pipe + 1).trim();
+    return { name: entry.slice(0, pipe).trim(), url: url || null };
+  }).filter(Boolean);
 }
 
 function processRows(rows) {
@@ -194,7 +201,7 @@ function processRows(rows) {
     excluded_count:   +r.excluded_count || 0,
     total_companies:  +r.total_companies || 0,
     new_company_count: r.new_company_count !== "" ? +r.new_company_count : null,
-    new_companies:    parseList(r.new_companies),
+    new_companies:    parseCompanyList(r.new_companies),
   }));
 }
 
@@ -221,9 +228,12 @@ function renderRun(keyword, run) {
   } else if (!run.new_companies.length) {
     listEl.innerHTML = `<p class="muted">No new companies this week.</p>`;
   } else {
-    const rows = run.new_companies.map((name, i) =>
-      `<tr><td>${i + 1}</td><td>${name}</td></tr>`
-    ).join("");
+    const rows = run.new_companies.map((company, i) => {
+      const cell = company.url
+        ? `<a href="${company.url}" target="_blank" rel="noopener">${company.name}</a>`
+        : company.name;
+      return `<tr><td>${i + 1}</td><td>${cell}</td></tr>`;
+    }).join("");
     listEl.innerHTML = `<table class="company-table"><thead><tr><th>#</th><th>Company</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 }
