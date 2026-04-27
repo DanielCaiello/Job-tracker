@@ -214,6 +214,28 @@ function groupByKeyword(rows) {
   return map;
 }
 
+function isoWeekKey(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${week}`;
+}
+
+function firstRunPerWeek(runs) {
+  const seen = new Set();
+  return runs
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter(r => {
+      const key = isoWeekKey(r.date);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function renderRun(keyword, run) {
   const isBaseline = run.new_company_count === null;
 
@@ -338,7 +360,7 @@ function init(allRows) {
 
   keywords.forEach((kw, i) => {
     const id = kw.replace(/\s+/g, "_");
-    const runs = grouped[kw];
+    const runs = firstRunPerWeek(grouped[kw]);
 
     // Tab button
     const btn = document.createElement("button");
