@@ -13,6 +13,7 @@ Usage:
 """
 
 import os
+import re
 import sys
 import csv
 import json
@@ -85,7 +86,7 @@ def collect_all_jobs(keyword, country, app_id, app_key):
 
 
 def employer_name(job):
-    return job.get("company", {}).get("display_name", "") or ""
+    return (job.get("company", {}).get("display_name", "") or "").strip()
 
 
 def filter_jobs(jobs, exclude_employer):
@@ -97,6 +98,48 @@ def filter_jobs(jobs, exclude_employer):
 
 def unique_companies(jobs):
     return {employer_name(j) for j in jobs if employer_name(j)}
+
+
+_SUFFIX_RE = re.compile(
+    r'[\s,]+(Inc\.?|LLC\.?|Ltd\.?|L\.L\.C\.?|Corp\.?|Corporation|Holdings?|'
+    r'Incorporated|Limited|LLP|LP|PLC|AG|GmbH|N\.A\.?|& Co\.?|Bank)$',
+    re.IGNORECASE,
+)
+
+
+def _normalize(name):
+    """Lowercase + strip trailing legal suffixes for lookalike comparison."""
+    name = name.strip().lower()
+    prev = None
+    while prev != name:
+        prev = name
+        name = _SUFFIX_RE.sub('', name).strip().rstrip(',').strip()
+    return name
+
+
+def canonicalize_companies(companies):
+    """
+    Collapse near-duplicate names within a set by:
+    1. Merging names with the same normalized base (e.g. 'Foo Holdings' == 'Foo Inc.')
+    2. Absorbing names where a shorter normalized name is a word-level prefix
+       (e.g. 'HD Supply' absorbs 'HD Supply Management')
+    The shortest original name is kept as canonical.
+    """
+    pairs = sorted([(c, _normalize(c)) for c in companies], key=lambda x: len(x[0]))
+    accepted = []  # list of (original, normalized)
+    for orig, norm in pairs:
+        absorbed = False
+        for _, cn in accepted:
+            if norm == cn:
+                absorbed = True
+                break
+            remainder = norm[len(cn):]
+            if remainder and norm.startswith(cn) and remainder[0] in (' ', ',', '.', '-'):
+                absorbed = True
+                break
+        if not absorbed:
+            accepted.append((orig, norm))
+    return {orig for orig, _ in accepted}
 
 
 def load_previous_companies(csv_path, keyword):
@@ -138,10 +181,11 @@ def run_keyword(keyword, exclude, country, csv_path, app_id, app_key):
     print(f"\n--- {keyword} ---")
     jobs_raw, api_total = collect_all_jobs(keyword, country, app_id, app_key)
 
-    jobs_filtered  = filter_jobs(jobs_raw, exclude)
-    excluded_n     = len(jobs_raw) - len(jobs_filtered)
-    curr_companies = unique_companies(jobs_filtered)
-    new_companies  = curr_companies - prev_companies
+    jobs_filtered   = filter_jobs(jobs_raw, exclude)
+    excluded_n      = len(jobs_raw) - len(jobs_filtered)
+    curr_companies  = canonicalize_companies(unique_companies(jobs_filtered))
+    prev_normalized = {_normalize(c) for c in prev_companies}
+    new_companies   = {c for c in curr_companies if _normalize(c) not in prev_normalized}
 
     print(f"  Fetched: {len(jobs_raw):,}  |  Third-party: {len(jobs_filtered):,}  |  Unique companies: {len(curr_companies):,}")
 
